@@ -544,18 +544,40 @@
     return (value || '').replace(/\s+/g, ' ').trim();
   }
 
+  function getPageTimeRange() {
+    try {
+      const pageParams = new URL(window.location.href).searchParams;
+      const fromTs = pageParams.get('from_ts');
+      const toTs = pageParams.get('to_ts');
+
+      if (fromTs && toTs && /^\d+$/.test(fromTs) && /^\d+$/.test(toTs)) {
+        return { fromTs, toTs };
+      }
+    } catch (_) {
+      // ignore malformed URL
+    }
+
+    return null;
+  }
+
   function buildLogsUrl(traceId) {
     const targetUrl = LOGS_URL_TEMPLATE.replace(
       '{TraceId}',
       encodeURIComponent(traceId)
     );
 
-    const now = Date.now();
-    const twoWeeksAgo = now - 14 * 24 * 60 * 60 * 1000;
     const url = new URL(targetUrl);
+    const pageRange = getPageTimeRange();
 
-    url.searchParams.set('from_ts', String(twoWeeksAgo));
-    url.searchParams.set('to_ts', String(now));
+    if (pageRange) {
+      url.searchParams.set('from_ts', pageRange.fromTs);
+      url.searchParams.set('to_ts', pageRange.toTs);
+    } else {
+      const now = Date.now();
+      const twoWeeksAgo = now - 14 * 24 * 60 * 60 * 1000;
+      url.searchParams.set('from_ts', String(twoWeeksAgo));
+      url.searchParams.set('to_ts', String(now));
+    }
 
     return url.toString();
   }

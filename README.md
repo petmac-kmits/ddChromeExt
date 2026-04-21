@@ -48,6 +48,11 @@ It injects action buttons directly next to TraceId values so you can jump to log
 - Lightweight tooltip shown on button hover/focus.
 - Font Awesome icons are loaded automatically for button visuals.
 
+### 8) Smart time range for opened logs
+- When opening TraceId logs (new tab or in-page panel), the extension reads `from_ts` and `to_ts` from the current page URL.
+- If both parameters are present, they are reused in the generated logs URL so the opened view covers the same time range as the current page.
+- If the parameters are not present in the page URL, the extension falls back to a default window of the last 14 days.
+
 ## Scope and Compatibility
 
 - Target host: `https://pluxee.datadoghq.eu/*`
@@ -61,3 +66,6 @@ It injects action buttons directly next to TraceId values so you can jump to log
 
 ### 1.1.0
 - Added the possibility to open a TraceId window in an in-page panel.
+
+### 1.2.0
+- Time range (`from_ts` / `to_ts`) is now read from the current page URL and reused when opening TraceId logs. Falls back to the last 14 days when parameters are not present.
