@@ -1,0 +1,11 @@
+{
+  "extName": {
+    "message": "DataDog Pluxee Extension"
+  },
+  "extShortName": {
+    "message": "DDPluxeeExt"
+  },
+  "extDescription": {
+    "message": "Extension to add new possibilities to datadog"
+  }
+}
