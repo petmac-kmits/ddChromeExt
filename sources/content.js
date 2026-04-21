@@ -24,6 +24,10 @@
   const IFRAME_WINDOW_CASCADE_STEPS = 10;
   let iframeWindowZIndexCounter = 2147483646;
 
+  /**
+   * Injects the Font Awesome stylesheet into the page <head> if it has not been added yet.
+   * Uses a marker attribute to avoid duplicate injections across re-runs.
+   */
   function ensureFontAwesomeLoaded() {
     if (document.head.querySelector(`[${FA_STYLESHEET_ATTR}]`)) {
       return;
@@ -36,6 +40,10 @@
     document.head.appendChild(link);
   }
 
+  /**
+   * Injects tooltip CSS into the page <head> if it has not been added yet.
+   * The tooltip element is used to show descriptive labels on button hover/focus.
+   */
   function ensureTooltipStylesLoaded() {
     if (document.head.querySelector('style[data-ddchromeext-tooltip-style]')) {
       return;
@@ -67,6 +75,10 @@
     document.head.appendChild(style);
   }
 
+  /**
+   * Returns the shared tooltip DOM element, creating and appending it to <body> if absent.
+   * @returns {HTMLElement} The singleton tooltip element.
+   */
   function getOrCreateTooltipElement() {
     let tooltip = document.body.querySelector(`[${TOOLTIP_ATTR}]`);
 
@@ -81,6 +93,11 @@
     return tooltip;
   }
 
+  /**
+   * Positions and shows the shared tooltip above the given button.
+   * Tooltip text is taken from the button's aria-label attribute.
+   * @param {HTMLElement} button - The button element to anchor the tooltip to.
+   */
   function showButtonTooltip(button) {
     const tooltip = getOrCreateTooltipElement();
     const rect = button.getBoundingClientRect();
@@ -92,6 +109,9 @@
     tooltip.setAttribute('data-visible', 'true');
   }
 
+  /**
+   * Hides the shared tooltip element if it exists.
+   */
   function hideButtonTooltip() {
     const tooltip = document.body.querySelector(`[${TOOLTIP_ATTR}]`);
     if (!tooltip) {
@@ -101,6 +121,11 @@
     tooltip.setAttribute('data-visible', 'false');
   }
 
+  /**
+   * Injects all floating panel window CSS into the page <head> if not already present.
+   * Covers the panel container, title bar, window control buttons, minimized/maximized states,
+   * snapped states, and the inner iframe element.
+   */
   function ensureIframeWindowStylesLoaded() {
     if (document.head.querySelector('style[data-ddchromeext-iframe-style]')) {
       return;
@@ -202,12 +227,23 @@
     document.head.appendChild(style);
   }
 
+  /**
+   * Finds an existing iframe panel window for the given TraceId.
+   * @param {string} traceId - The TraceId value to look up.
+   * @returns {HTMLElement|null} The matching panel element, or null if not found.
+   */
   function findTraceIdIframeWindow(traceId) {
     return Array.from(document.body.querySelectorAll(`[${IFRAME_WINDOW_ATTR}]`)).find(
       (win) => win.getAttribute(IFRAME_WINDOW_TRACE_ATTR) === traceId
     ) || null;
   }
 
+  /**
+   * Recalculates and applies the bottom-dock positions of all currently minimized panels.
+   * Panels are arranged left-to-right at the bottom of the viewport, wrapping to additional
+   * rows when they exceed the available width. Called after any minimize/restore/close action
+   * and on browser resize.
+   */
   function layoutMinimizedWindows() {
     const minimizedWindows = Array.from(
       document.body.querySelectorAll(`[${IFRAME_WINDOW_ATTR}][data-minimized="true"]`)
@@ -240,11 +276,22 @@
     });
   }
 
+  /**
+   * Increments the global z-index counter and applies it to the given panel,
+   * ensuring it renders above all other panels.
+   * @param {HTMLElement} win - The panel element to bring to front.
+   */
   function bringWindowToFront(win) {
     iframeWindowZIndexCounter += 1;
     win.style.zIndex = String(iframeWindowZIndexCounter);
   }
 
+  /**
+   * Calculates the top/left position for the next new panel window using a cascade offset.
+   * The offset steps are derived from the current number of open panels, wrapping back
+   * to the base position after IFRAME_WINDOW_CASCADE_STEPS windows.
+   * @returns {{ top: number, left: number }} Position in pixels.
+   */
   function getNextWindowPosition() {
     const existingWindows = Array.from(
       document.body.querySelectorAll(`[${IFRAME_WINDOW_ATTR}]`)
@@ -257,6 +304,14 @@
     };
   }
 
+  /**
+   * Makes a floating panel draggable by its title bar handle.
+   * Attaches mousemove/mouseup listeners on the document and cleans them up
+   * automatically via a MutationObserver when the panel is removed from the DOM.
+   * Drag is disabled while the panel is minimized.
+   * @param {HTMLElement} floatingWin - The panel element to move.
+   * @param {HTMLElement} handle - The drag handle element (title bar).
+   */
   function makeDraggable(floatingWin, handle) {
     let isDragging = false;
     let startX = 0;
@@ -303,6 +358,14 @@
     removalObserver.observe(document.body, { childList: true, subtree: true });
   }
 
+  /**
+   * Opens a floating in-page panel showing Datadog logs for the given TraceId.
+   * If a panel for that TraceId already exists, it is restored from minimized state
+   * (if needed) and brought to front without reloading the iframe.
+   * New panels are positioned with a cascade offset and include a draggable title bar
+   * with minimize, maximize, snap-left, snap-right, and close controls.
+   * @param {string} traceId - The TraceId value to open logs for.
+   */
   function openTraceIdInIframe(traceId) {
     const existing = findTraceIdIframeWindow(traceId);
     if (existing) {
@@ -344,6 +407,13 @@
     titleSpan.setAttribute('data-ddchromeext-iframe-title', 'true');
     titleSpan.textContent = `TraceId: ${traceId}`;
 
+    /**
+     * Creates a single title-bar icon button for the panel.
+     * @param {string} attr - Data attribute name to set on the button for identification.
+     * @param {string} ariaLabel - Accessible label for the button.
+     * @param {string} iconClass - Font Awesome class string for the button icon.
+     * @returns {HTMLButtonElement} The created button element.
+     */
     function makeWinBtn(attr, ariaLabel, iconClass) {
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -368,6 +438,10 @@
     let savedLeft = '';
     let savedTop = '';
 
+    /**
+     * Saves the panel's current size and position to local variables and dataset
+     * so they can be restored after maximize, snap, or minimize operations.
+     */
     function saveCurrentBounds() {
       savedWidth = win.style.width || `${win.offsetWidth}px`;
       savedHeight = win.style.height || `${win.offsetHeight}px`;
@@ -379,6 +453,10 @@
       win.dataset.restoreTop = savedTop;
     }
 
+    /**
+     * Restores the panel's size and position from the previously saved bounds.
+     * Also clears any bottom positioning left by minimized dock layout.
+     */
     function restoreSavedBounds() {
       if (savedWidth) {
         win.style.width = savedWidth;
@@ -395,12 +473,23 @@
       win.style.bottom = '';
     }
 
+    /**
+     * Removes the snap state attribute from the panel and resets both snap button labels
+     * back to their default values.
+     */
     function clearSnapState() {
       win.removeAttribute('data-snapped');
       snapLeftBtn.setAttribute('aria-label', 'Snap left half');
       snapRightBtn.setAttribute('aria-label', 'Snap right half');
     }
 
+    /**
+     * Snaps the panel to the left or right half of the viewport.
+     * If the panel is already snapped to the requested side, it is restored instead.
+     * Restores from minimized state first if needed. Saves current bounds before
+     * snapping so they can be recovered on unsnap.
+     * @param {'left'|'right'} side - Which half of the viewport to snap to.
+     */
     function snapWindow(side) {
       const currentSnap = win.getAttribute('data-snapped');
       const isAlreadySnappedToSide = currentSnap === side;
@@ -533,6 +622,11 @@
     makeDraggable(win, titleBar);
   }
 
+  /**
+   * Checks whether a JSON viewer key cell contains the text "TraceId".
+   * @param {HTMLElement} keyCell - The key cell element to inspect.
+   * @returns {boolean} True if any child span contains exactly "TraceId".
+   */
   function isTraceIdKeyCell(keyCell) {
     const spanElements = keyCell.querySelectorAll('span');
     return Array.from(spanElements).some(
@@ -540,10 +634,20 @@
     );
   }
 
+  /**
+   * Collapses all whitespace in a string to single spaces and trims leading/trailing whitespace.
+   * @param {string|null|undefined} value - The input string.
+   * @returns {string} The normalized string.
+   */
   function normalizeText(value) {
     return (value || '').replace(/\s+/g, ' ').trim();
   }
 
+  /**
+   * Reads the from_ts and to_ts timestamp parameters from the current page URL.
+   * Both values must be present and consist of digits only to be considered valid.
+   * @returns {{ fromTs: string, toTs: string }|null} The time range strings, or null if unavailable.
+   */
   function getPageTimeRange() {
     try {
       const pageParams = new URL(window.location.href).searchParams;
@@ -560,6 +664,13 @@
     return null;
   }
 
+  /**
+   * Builds the full Datadog Logs URL for a given TraceId.
+   * Reuses from_ts / to_ts from the current page URL if present;
+   * otherwise falls back to the last 14 days from now.
+   * @param {string} traceId - The TraceId value to filter logs by.
+   * @returns {string} The complete Datadog Logs URL.
+   */
   function buildLogsUrl(traceId) {
     const targetUrl = LOGS_URL_TEMPLATE.replace(
       '{TraceId}',
@@ -582,10 +693,19 @@
     return url.toString();
   }
 
+  /**
+   * Opens the Datadog Logs page for the given TraceId in a new browser tab.
+   * @param {string} traceId - The TraceId value to open logs for.
+   */
   function openTraceIdLogs(traceId) {
     window.open(buildLogsUrl(traceId), '_blank', 'noopener,noreferrer');
   }
 
+  /**
+   * Attaches mouseenter, mouseleave, focus, and blur listeners to a button
+   * so the shared tooltip is shown and hidden appropriately.
+   * @param {HTMLElement} button - The button to attach tooltip behavior to.
+   */
   function attachTooltipHandlers(button) {
     button.addEventListener('mouseenter', () => {
       showButtonTooltip(button);
@@ -604,6 +724,14 @@
     });
   }
 
+  /**
+   * Extracts a TraceId hex string from a dashboard table cell.
+   * Prefers content from an overflower or JSON viewer value element;
+   * falls back to the cell's full text content. Matches 32-character hex strings first,
+   * then any 16–64 character hex sequence.
+   * @param {HTMLElement} cell - The table cell to extract a TraceId from.
+   * @returns {string} The extracted TraceId, or an empty string if not found.
+   */
   function extractTraceIdFromDashboardCell(cell) {
     const overflowerOriginal = cell.querySelector(
       'div[data-component-name="overflower-original"].druids_layout_overflower__original'
@@ -629,6 +757,11 @@
     return sourceText.split(' ')[0] || '';
   }
 
+  /**
+   * Scans all Datadog dashboard tables on the page and injects open-in-tab and
+   * open-in-panel buttons into cells belonging to the TraceId column.
+   * Skips rows where buttons have already been injected.
+   */
   function injectDashboardTableButtons() {
     const tables = document.querySelectorAll('table.druids_table_table__table');
 
@@ -684,6 +817,11 @@
     });
   }
 
+  /**
+   * Creates a button for a dashboard table row that opens TraceId logs in a new tab.
+   * @param {string} traceId - The TraceId value the button will open.
+   * @returns {HTMLButtonElement} The configured button element.
+   */
   function createDashboardTraceIdButton(traceId) {
     const button = document.createElement('button');
     button.type = 'button';
@@ -721,6 +859,11 @@
     return button;
   }
 
+  /**
+   * Creates a button for a dashboard table row that opens TraceId logs in an in-page panel.
+   * @param {string} traceId - The TraceId value the button will open.
+   * @returns {HTMLButtonElement} The configured button element.
+   */
   function createDashboardTraceIdIframeButton(traceId) {
     const button = document.createElement('button');
     button.type = 'button';
@@ -758,6 +901,12 @@
     return button;
   }
 
+  /**
+   * Extracts the TraceId string from a JSON viewer value cell.
+   * Reads from the string value div, excluding tooltip elements.
+   * @param {HTMLElement} valueCell - The value cell element to read from.
+   * @returns {string} The TraceId text, or an empty string if not found.
+   */
   function getTraceIdFromValueCell(valueCell) {
     const valueDiv = valueCell.querySelector(
       '.druids_misc_json-viewer_value--string > div:not(.druids_dialogs_tooltip)'
@@ -770,6 +919,13 @@
     return valueDiv.textContent.trim();
   }
 
+  /**
+   * Creates a button for a JSON viewer row that opens TraceId logs in a new tab.
+   * Clones the existing Datadog tooltip button to match the host application's styling,
+   * then replaces its icon and wires a new click handler.
+   * @param {HTMLElement} valueCell - The value cell element containing the TraceId.
+   * @returns {HTMLButtonElement|null} The configured button, or null if prerequisites are missing.
+   */
   function createTraceIdButton(valueCell) {
     const existingTooltip = valueCell.querySelector('.druids_dialogs_tooltip');
     if (!existingTooltip) {
@@ -819,6 +975,13 @@
     return button;
   }
 
+  /**
+   * Creates a button for a JSON viewer row that opens TraceId logs in an in-page panel.
+   * Clones the existing Datadog tooltip button to match the host application's styling,
+   * then replaces its icon and wires a new click handler.
+   * @param {HTMLElement} valueCell - The value cell element containing the TraceId.
+   * @returns {HTMLButtonElement|null} The configured button, or null if prerequisites are missing.
+   */
   function createTraceIdIframeButton(valueCell) {
     const existingTooltip = valueCell.querySelector('.druids_dialogs_tooltip');
     if (!existingTooltip) {
@@ -868,6 +1031,12 @@
     return button;
   }
 
+  /**
+   * Main injection entry point. Scans JSON viewer rows for TraceId fields and injects
+   * open-in-tab and open-in-panel buttons into their tooltip containers.
+   * Also delegates to injectDashboardTableButtons() for dashboard table rows.
+   * Safe to call repeatedly; already-injected rows are skipped.
+   */
   function injectButtons() {
     const rows = document.querySelectorAll(ROW_SELECTOR);
 
