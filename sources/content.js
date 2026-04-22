@@ -18,6 +18,10 @@
   const IFRAME_WINDOW_ATTR = 'data-ddchromeext-iframe-window';
   const IFRAME_WINDOW_TRACE_ATTR = 'data-ddchromeext-traceid';
   const IFRAME_TOOLTIP_TEXT = 'Open TraceId logs in panel';
+  const IFRAME_WINDOW_INITIAL_SIZE_RATIO = 0.7;
+  const NAVBAR_SELECTOR = 'ul[aria-label="Useful links and tools"]';
+  const NAVBAR_PRETTIFY_ATTR = 'data-ddchromeext-navbar-prettify';
+  const NAVBAR_TOAST_ATTR = 'data-ddchromeext-toast';
   const IFRAME_WINDOW_BASE_TOP = 60;
   const IFRAME_WINDOW_BASE_LEFT = 60;
   const IFRAME_WINDOW_CASCADE_OFFSET = 24;
@@ -122,6 +126,117 @@
   }
 
   /**
+   * Shows a brief toast notification at the top-right of the page with success or error styling.
+   * The toast disappears automatically after 3 seconds.
+   * @param {string} message - The message to display.
+   * @param {'success'|'error'} type - Controls the background colour.
+   */
+  function showNavbarNotification(message, type) {
+    let toast = document.body.querySelector(`[${NAVBAR_TOAST_ATTR}]`);
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.setAttribute(NAVBAR_TOAST_ATTR, 'true');
+      toast.style.cssText =
+        'position:fixed;top:16px;right:16px;z-index:2147483647;' +
+        'padding:10px 16px;border-radius:6px;font-size:13px;color:#f9fafb;' +
+        'pointer-events:none;max-width:320px;word-break:break-word;' +
+        'transition:opacity 200ms ease;opacity:0;';
+      document.body.appendChild(toast);
+    }
+
+    toast.textContent = message;
+    toast.style.background = type === 'error' ? '#b91c1c' : '#065f46';
+    toast.style.opacity = '1';
+
+    clearTimeout(toast._hideTimer);
+    toast._hideTimer = setTimeout(() => {
+      toast.style.opacity = '0';
+    }, 3000);
+  }
+
+  /**
+   * Injects a "Format JSON" item at the top of the Datadog sidebar nav list.
+   * On click, reads JSON from the system clipboard, formats it with 2-space indentation,
+   * and writes the result back to the clipboard.
+   * Shows a toast notification on success or when the clipboard content is not valid JSON.
+   * Safe to call repeatedly; skips injection if the button is already present.
+   */
+  function injectNavbarPrettifyButton() {
+    const navbar = document.querySelector(NAVBAR_SELECTOR);
+    if (!navbar || navbar.querySelector(`[${NAVBAR_PRETTIFY_ATTR}]`)) {
+      return;
+    }
+
+    const li = document.createElement('li');
+    li.className = 'single-page-app_navbar_navbar-menu__list-item';
+    li.setAttribute(NAVBAR_PRETTIFY_ATTR, 'true');
+
+    const safeArea = document.createElement('div');
+    safeArea.className = 'single-page-app_navbar_navbar-menu__safe-area';
+
+    const actionDiv = document.createElement('div');
+    actionDiv.setAttribute('data-dd-action-name', 'Action');
+    actionDiv.setAttribute('data-component-name', 'Action');
+    actionDiv.className =
+      'druids_form_action druids_form_action--is-basic single-page-app_navbar_navbar-menu-item';
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.setAttribute('aria-label', 'Format JSON from clipboard');
+    btn.className =
+      'druids_nav_link druids_nav_link--md druids_nav_link--default single-page-app_navbar_navbar-menu-item__label';
+    btn.style.cssText =
+      'background:none;border:none;cursor:pointer;width:100%;text-align:left;padding:0;';
+
+    const labelContent = document.createElement('div');
+    labelContent.className =
+      'druids_layout_flex druids_layout_flex--direction-row druids_layout_flex--align-items-center ' +
+      'druids_layout_flex--justify-flex-start druids_layout_flex--wrap-nowrap druids_layout_flex--is-full-width ' +
+      'druids_layout_flex--has-legacy-gap single-page-app_navbar_navbar-menu-item__label__content';
+
+    const icon = document.createElement('i');
+    icon.className = 'fa-solid fa-paragraph single-page-app_navbar_navbar-menu-item__label__icon';
+    icon.style.cssText =
+      'font-size:16px;width:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;';
+    icon.setAttribute('aria-hidden', 'true');
+
+    const textWrapper = document.createElement('div');
+    textWrapper.className =
+      'druids_layout_flex druids_layout_flex--direction-row druids_layout_flex--align-items-baseline ' +
+      'druids_layout_flex--justify-flex-start druids_layout_flex--wrap-nowrap ' +
+      'druids_layout_flex--is-full-width druids_layout_flex--has-legacy-gap';
+
+    const textSpan = document.createElement('span');
+    textSpan.className = 'single-page-app_navbar_navbar-menu-item__label__text';
+    textSpan.textContent = 'Format JSON';
+
+    textWrapper.appendChild(textSpan);
+    labelContent.appendChild(icon);
+    labelContent.appendChild(textWrapper);
+    btn.appendChild(labelContent);
+    actionDiv.appendChild(btn);
+    li.appendChild(safeArea);
+    li.appendChild(actionDiv);
+    navbar.prepend(li);
+
+    btn.addEventListener('click', async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        const parsed = JSON.parse(text);
+        const formatted = JSON.stringify(parsed, null, 2);
+        await navigator.clipboard.writeText(formatted);
+        showNavbarNotification('JSON formatted and copied to clipboard', 'success');
+      } catch (err) {
+        if (err instanceof SyntaxError) {
+          showNavbarNotification('Clipboard content is not valid JSON', 'error');
+        } else {
+          showNavbarNotification('Could not access clipboard', 'error');
+        }
+      }
+    });
+  }
+
+  /**
    * Injects all floating panel window CSS into the page <head> if not already present.
    * Covers the panel container, title bar, window control buttons, minimized/maximized states,
    * snapped states, and the inner iframe element.
@@ -172,11 +287,19 @@
       'flex: 1;' +
       'margin-right: 8px;' +
       '}' +
+      '[data-ddchromeext-iframe-title-left] {' +
+      'display: flex;' +
+      'align-items: center;' +
+      'gap: 4px;' +
+      'min-width: 0;' +
+      'flex: 1;' +
+      '}' +
       '[data-ddchromeext-iframe-close],' +
       '[data-ddchromeext-iframe-minimize],' +
       '[data-ddchromeext-iframe-maximize],' +
       '[data-ddchromeext-iframe-snap-left],' +
-      '[data-ddchromeext-iframe-snap-right] {' +
+      '[data-ddchromeext-iframe-snap-right],' +
+      '[data-ddchromeext-iframe-rename] {' +
       'background: none;' +
       'border: none;' +
       'color: #9ca3af;' +
@@ -191,7 +314,8 @@
       '[data-ddchromeext-iframe-minimize]:hover,' +
       '[data-ddchromeext-iframe-maximize]:hover,' +
       '[data-ddchromeext-iframe-snap-left]:hover,' +
-      '[data-ddchromeext-iframe-snap-right]:hover {' +
+      '[data-ddchromeext-iframe-snap-right]:hover,' +
+      '[data-ddchromeext-iframe-rename]:hover {' +
       'color: #f9fafb;' +
       'background: #374151;' +
       '}' +
@@ -396,6 +520,19 @@
     const win = document.createElement('div');
     win.setAttribute(IFRAME_WINDOW_ATTR, 'true');
     win.setAttribute(IFRAME_WINDOW_TRACE_ATTR, traceId);
+
+    const initialWidth = Math.max(
+      320,
+      Math.floor(window.innerWidth * IFRAME_WINDOW_INITIAL_SIZE_RATIO)
+    );
+    const initialHeight = Math.max(
+      220,
+      Math.floor(window.innerHeight * IFRAME_WINDOW_INITIAL_SIZE_RATIO)
+    );
+
+    win.style.width = `${initialWidth}px`;
+    win.style.height = `${initialHeight}px`;
+
     const nextPos = getNextWindowPosition();
     win.style.top = `${nextPos.top}px`;
     win.style.left = `${nextPos.left}px`;
@@ -406,6 +543,32 @@
     const titleSpan = document.createElement('span');
     titleSpan.setAttribute('data-ddchromeext-iframe-title', 'true');
     titleSpan.textContent = `TraceId: ${traceId}`;
+
+    const renameBtn = makeWinBtn(
+      'data-ddchromeext-iframe-rename',
+      'Rename panel',
+      'fa-solid fa-pencil'
+    );
+    renameBtn.addEventListener('mousedown', (event) => {
+      event.stopPropagation();
+    });
+    renameBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const currentTitle = titleSpan.textContent || `TraceId: ${traceId}`;
+      const updatedTitle = window.prompt('Rename panel', currentTitle);
+
+      if (updatedTitle === null) {
+        return;
+      }
+
+      const normalizedTitle = updatedTitle.trim();
+      if (!normalizedTitle) {
+        return;
+      }
+
+      titleSpan.textContent = normalizedTitle;
+    });
 
     /**
      * Creates a single title-bar icon button for the panel.
@@ -606,7 +769,12 @@
     btnGroup.appendChild(snapRightBtn);
     btnGroup.appendChild(closeBtn);
 
-    titleBar.appendChild(titleSpan);
+    const titleLeft = document.createElement('div');
+    titleLeft.setAttribute('data-ddchromeext-iframe-title-left', 'true');
+    titleLeft.appendChild(titleSpan);
+    titleLeft.appendChild(renameBtn);
+
+    titleBar.appendChild(titleLeft);
     titleBar.appendChild(btnGroup);
 
     const iframe = document.createElement('iframe');
@@ -1071,12 +1239,14 @@
     });
 
     injectDashboardTableButtons();
+    injectNavbarPrettifyButton();
   }
 
   ensureFontAwesomeLoaded();
   ensureTooltipStylesLoaded();
   ensureIframeWindowStylesLoaded();
   window.addEventListener('resize', layoutMinimizedWindows);
+  injectNavbarPrettifyButton();
   injectButtons();
 
   const observer = new MutationObserver(() => {

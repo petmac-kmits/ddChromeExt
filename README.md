@@ -26,6 +26,8 @@ It injects action buttons directly next to TraceId values so you can jump to log
 ### 3) Floating panel window management
 - Draggable panel (drag by title bar).
 - Resizable panel (`resize: both`).
+- Initial panel size opens at 70% of current viewport.
+- Rename panel title using a pencil icon next to the title.
 - Minimize / restore.
 - Maximize / restore.
 - Snap to left half of viewport.
@@ -53,6 +55,12 @@ It injects action buttons directly next to TraceId values so you can jump to log
 - If both parameters are present, they are reused in the generated logs URL so the opened view covers the same time range as the current page.
 - If the parameters are not present in the page URL, the extension falls back to a default window of the last 14 days.
 
+### 9) Format JSON from clipboard
+- Adds a "Format JSON" button in the Datadog sidebar (top of "Useful links and tools" menu).
+- Click the button to read JSON from the system clipboard, format it with 2-space indentation, and write the result back to the clipboard.
+- Toast notification shows success or error feedback.
+- Requires one-time clipboard permission grant when the extension is first loaded.
+
 ## Scope and Compatibility
 
 - Target host: `https://pluxee.datadoghq.eu/*`
@@ -69,3 +77,11 @@ It injects action buttons directly next to TraceId values so you can jump to log
 
 ### 1.2.0
 - Time range (`from_ts` / `to_ts`) is now read from the current page URL and reused when opening TraceId logs. Falls back to the last 14 days when parameters are not present.
+
+### 1.2.1
+- Added panel rename support via a pencil icon next to the panel title.
+- Changed initial panel size to 70% of the current browser window.
+
+### 1.3.0
+- Added "Format JSON" button to the Datadog sidebar for quick JSON formatting from clipboard.
+- Integrated clipboard permissions (`clipboardRead`, `clipboardWrite`) for persistent access.
