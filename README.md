@@ -61,6 +61,12 @@ It injects action buttons directly next to TraceId values so you can jump to log
 - Toast notification shows success or error feedback.
 - Requires one-time clipboard permission grant when the extension is first loaded.
 
+### 10) Copy logs URL from floating panel
+- Adds a link icon button next to the pencil (rename) icon in the floating panel title bar.
+- Click the button to copy the current logs URL to the system clipboard.
+- Toast notification shows success or error feedback.
+- Useful for sharing the exact logs view with team members or for bookmarking.
+
 ## Scope and Compatibility
 
 - Target host: `https://pluxee.datadoghq.eu/*`
@@ -85,3 +91,7 @@ It injects action buttons directly next to TraceId values so you can jump to log
 ### 1.3.0
 - Added "Format JSON" button to the Datadog sidebar for quick JSON formatting from clipboard.
 - Integrated clipboard permissions (`clipboardRead`, `clipboardWrite`) for persistent access.
+
+### 1.4.0
+- Added "Copy logs URL" button to floating panel title bar (link icon next to pencil).
+- Quick copy of logs URL to clipboard with success/error feedback via toast notification.

@@ -12,7 +12,7 @@
   const FA_STYLESHEET_URL =
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css';
   const LOGS_URL_TEMPLATE =
-    'https://pluxee.datadoghq.eu/logs?query=%40TraceId%3A%22{TraceId}%22&agg_m=count&agg_m_source=base&agg_t=count&fromUser=true&messageDisplay=inline&refresh_mode=sliding&storage=hot&stream_sort=time%2Cdesc&viz=stream';
+    'https://pluxee.datadoghq.eu/logs?query=%40TraceId%3A%22{TraceId}%22&agg_m=count&agg_m_source=base&agg_t=count&fromUser=true&messageDisplay=inline&refresh_mode=paused&storage=hot&stream_sort=time%2Cdesc&viz=stream&live=false';
   const IFRAME_BUTTON_ATTR = 'data-ddchromeext-traceid-iframe-button';
   const DASHBOARD_IFRAME_BUTTON_ATTR = 'data-ddchromeext-traceid-table-iframe-button';
   const IFRAME_WINDOW_ATTR = 'data-ddchromeext-iframe-window';
@@ -22,6 +22,7 @@
   const NAVBAR_SELECTOR = 'ul[aria-label="Useful links and tools"]';
   const NAVBAR_PRETTIFY_ATTR = 'data-ddchromeext-navbar-prettify';
   const NAVBAR_TOAST_ATTR = 'data-ddchromeext-toast';
+  const NAVBAR_COPYURL_ATTR = 'data-ddchromeext-navbar-copyurl';
   const IFRAME_WINDOW_BASE_TOP = 60;
   const IFRAME_WINDOW_BASE_LEFT = 60;
   const IFRAME_WINDOW_CASCADE_OFFSET = 24;
@@ -299,7 +300,8 @@
       '[data-ddchromeext-iframe-maximize],' +
       '[data-ddchromeext-iframe-snap-left],' +
       '[data-ddchromeext-iframe-snap-right],' +
-      '[data-ddchromeext-iframe-rename] {' +
+      '[data-ddchromeext-iframe-rename],' +
+      '[data-ddchromeext-iframe-copyurl] {' +
       'background: none;' +
       'border: none;' +
       'color: #9ca3af;' +
@@ -315,7 +317,8 @@
       '[data-ddchromeext-iframe-maximize]:hover,' +
       '[data-ddchromeext-iframe-snap-left]:hover,' +
       '[data-ddchromeext-iframe-snap-right]:hover,' +
-      '[data-ddchromeext-iframe-rename]:hover {' +
+      '[data-ddchromeext-iframe-rename]:hover,' +
+      '[data-ddchromeext-iframe-copyurl]:hover {' +
       'color: #f9fafb;' +
       'background: #374151;' +
       '}' +
@@ -544,6 +547,8 @@
     titleSpan.setAttribute('data-ddchromeext-iframe-title', 'true');
     titleSpan.textContent = `TraceId: ${traceId}`;
 
+
+    // Pencil (rename) button
     const renameBtn = makeWinBtn(
       'data-ddchromeext-iframe-rename',
       'Rename panel',
@@ -557,18 +562,38 @@
       event.stopPropagation();
       const currentTitle = titleSpan.textContent || `TraceId: ${traceId}`;
       const updatedTitle = window.prompt('Rename panel', currentTitle);
-
       if (updatedTitle === null) {
         return;
       }
-
       const normalizedTitle = updatedTitle.trim();
       if (!normalizedTitle) {
         return;
       }
-
       titleSpan.textContent = normalizedTitle;
     });
+
+    // Copy logs URL button
+    const copyUrlBtn = makeWinBtn(
+      'data-ddchromeext-iframe-copyurl',
+      'Copy logs URL to clipboard',
+      'fa-solid fa-link'
+    );
+    copyUrlBtn.addEventListener('mousedown', (event) => {
+      event.stopPropagation();
+    });
+    copyUrlBtn.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      try {
+        await navigator.clipboard.writeText(url);
+        showNavbarNotification('Logs URL copied to clipboard', 'success');
+      } catch (err) {
+        showNavbarNotification('Could not copy URL', 'error');
+      }
+    });
+    copyUrlBtn.setAttribute('tabindex', '0');
+    copyUrlBtn.setAttribute('aria-label', 'Copy logs URL to clipboard');
+    attachTooltipHandlers(copyUrlBtn);
 
     /**
      * Creates a single title-bar icon button for the panel.
@@ -773,6 +798,7 @@
     titleLeft.setAttribute('data-ddchromeext-iframe-title-left', 'true');
     titleLeft.appendChild(titleSpan);
     titleLeft.appendChild(renameBtn);
+    titleLeft.appendChild(copyUrlBtn);
 
     titleBar.appendChild(titleLeft);
     titleBar.appendChild(btnGroup);
