@@ -67,6 +67,17 @@ It injects action buttons directly next to TraceId values so you can jump to log
 - Toast notification shows success or error feedback.
 - Useful for sharing the exact logs view with team members or for bookmarking.
 
+### 11) Open logs panel from APM trace header
+- Injects an "Open TraceId logs in panel" button directly after the trace ID value in the APM trace header panel (the `trace_id` field shown at the top of a trace view).
+- Clicking the button opens the familiar floating in-page panel for the trace ID, with all the same window management features (drag, resize, minimize, maximize, snap, rename, copy URL).
+
+### 12) Trace Logs tab in span view
+- Adds a custom **"Trace Logs"** tab at the end of the span detail nav (next to Overview, Infrastructure, Metrics, Logs, etc.).
+- Clicking the tab hides Datadog's current tab content without modifying its DOM structure and injects a full-width inline iframe showing the Datadog Logs view filtered to the active trace ID.
+- Switching to any other tab restores Datadog's original content and removes the iframe.
+- Tab button highlights correctly (active/inactive state) in sync with the Datadog tab bar.
+- Injection is deferred by 5 seconds after the span view is first detected to allow Datadog to finish rendering.
+
 ## Scope and Compatibility
 
 - Target host: `https://pluxee.datadoghq.eu/*`
@@ -95,3 +106,8 @@ It injects action buttons directly next to TraceId values so you can jump to log
 ### 1.4.0
 - Added "Copy logs URL" button to floating panel title bar (link icon next to pencil).
 - Quick copy of logs URL to clipboard with success/error feedback via toast notification.
+
+### 1.5.0
+- Added "Open TraceId logs in panel" button next to the trace ID value in the APM trace header panel.
+- Added "Trace Logs" custom tab in the APM span detail view that opens an inline iframe filtered to the active trace ID.
+- Switching away from the Trace Logs tab fully restores Datadog's original tab content.

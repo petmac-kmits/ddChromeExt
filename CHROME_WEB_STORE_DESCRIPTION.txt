@@ -1,0 +1,35 @@
+===== CHROME WEB STORE LISTING =====
+
+EXTENSION NAME:
+ddChromeExt - Datadog TraceId Navigator
+
+SHORT DESCRIPTION (132 characters max):
+Navigate Datadog TraceIds faster with one-click access to logs in new tabs or floating panels.
+
+DETAILED DESCRIPTION:
+ddChromeExt is a productivity tool that accelerates TraceId navigation in Datadog. Inject action buttons directly next to TraceId values for instant access to logs.
+
+KEY FEATURES:
+✓ Open TraceId logs in new tab or floating in-page panel
+✓ Auto-detect time range from current page and apply to logs
+✓ Draggable, resizable, minimizable floating panels
+✓ Multiple TraceId windows open simultaneously
+✓ Quick JSON formatter for clipboard debugging
+✓ Copy logs URL with one click
+✓ Smart panel placement with cascading offset
+✓ Lightweight tooltips on hover
+
+PERMISSIONS JUSTIFICATION:
+- clipboardRead/clipboardWrite: Used for JSON formatting feature and copying logs URLs
+
+TARGET AUDIENCE:
+Datadog users working with distributed tracing, log analysis, and troubleshooting.
+
+CATEGORY:
+Productivity / Developer Tools
+
+===== TECHNICAL DETAILS =====
+Manifest Version: 3
+Minimum Chrome Version: 114
+Target Host: https://pluxee.datadoghq.eu/*
+Version: 1.4.0

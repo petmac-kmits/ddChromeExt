@@ -15,6 +15,13 @@
     'https://pluxee.datadoghq.eu/logs?query=%40TraceId%3A%22{TraceId}%22&agg_m=count&agg_m_source=base&agg_t=count&fromUser=true&messageDisplay=inline&refresh_mode=paused&storage=hot&stream_sort=time%2Cdesc&viz=stream&live=false';
   const IFRAME_BUTTON_ATTR = 'data-ddchromeext-traceid-iframe-button';
   const DASHBOARD_IFRAME_BUTTON_ATTR = 'data-ddchromeext-traceid-table-iframe-button';
+  const TRACE_HEADER_BUTTON_ATTR = 'data-ddchromeext-trace-header-button';
+  const TRACE_HEADER_SELECTOR = '.trace_trace-header-panel__header-title';
+  const SPAN_VIEW_SELECTOR = '.trace_span-view-full-access';
+  const SPAN_VIEW_NAV_SELECTOR = '.trace_span-view-full-access__nav';
+  const SPAN_VIEW_LOGS_SELECTOR = '.trace_span-logs';
+  const SPAN_VIEW_TAB_BUTTON_ATTR = 'data-ddchromeext-span-tab-button';
+  const SPAN_VIEW_IFRAME_ATTR = 'data-ddchromeext-span-iframe';
   const IFRAME_WINDOW_ATTR = 'data-ddchromeext-iframe-window';
   const IFRAME_WINDOW_TRACE_ATTR = 'data-ddchromeext-traceid';
   const IFRAME_TOOLTIP_TEXT = 'Open TraceId logs in panel';
@@ -28,6 +35,7 @@
   const IFRAME_WINDOW_CASCADE_OFFSET = 24;
   const IFRAME_WINDOW_CASCADE_STEPS = 10;
   let iframeWindowZIndexCounter = 2147483646;
+  let spanViewTabInjectTimer = null;
 
   /**
    * Injects the Font Awesome stylesheet into the page <head> if it has not been added yet.
@@ -571,6 +579,7 @@
       }
       titleSpan.textContent = normalizedTitle;
     });
+    attachTooltipHandlers(renameBtn);
 
     // Copy logs URL button
     const copyUrlBtn = makeWinBtn(
@@ -620,6 +629,12 @@
     const snapRightBtn = makeWinBtn('data-ddchromeext-iframe-snap-right', 'Snap right half', 'fa-solid fa-table-columns');
     const closeBtn = makeWinBtn('data-ddchromeext-iframe-close', 'Close panel', 'fa-solid fa-xmark');
     snapRightBtn.style.transform = 'scaleX(-1)';
+
+    attachTooltipHandlers(minimizeBtn);
+    attachTooltipHandlers(maximizeBtn);
+    attachTooltipHandlers(snapLeftBtn);
+    attachTooltipHandlers(snapRightBtn);
+    attachTooltipHandlers(closeBtn);
 
     let savedWidth = '';
     let savedHeight = '';
@@ -893,6 +908,35 @@
    */
   function openTraceIdLogs(traceId) {
     window.open(buildLogsUrl(traceId), '_blank', 'noopener,noreferrer');
+  }
+
+  /**
+   * Extracts the active trace ID from the trace header panel visible on the page.
+   * Looks for the span labelled "trace_id" and reads the hex value from its sibling.
+   * @returns {string} The trace ID hex string, or an empty string if not found.
+   */
+  function getPageTraceId() {
+    const headerTitles = document.querySelectorAll(TRACE_HEADER_SELECTOR);
+    for (const header of headerTitles) {
+      const candidateSpans = header.querySelectorAll('span.druids_margin--right-sm');
+      for (const span of candidateSpans) {
+        if (span.textContent.trim() !== 'trace_id') {
+          continue;
+        }
+        const valueSpan = span.nextElementSibling;
+        if (!valueSpan) {
+          continue;
+        }
+        const overflower = valueSpan.querySelector(
+          'div[data-component-name="overflower-original"].druids_layout_overflower__original'
+        );
+        const traceId = overflower ? overflower.textContent.trim() : '';
+        if (traceId && /^[a-f0-9]{16,64}$/i.test(traceId)) {
+          return traceId;
+        }
+      }
+    }
+    return '';
   }
 
   /**
@@ -1226,6 +1270,231 @@
   }
 
   /**
+   * Scans Datadog APM span view panels for the Span tab nav and injects a custom
+   * "Trace Logs" tab. Clicking the tab clears the .trace_span-logs div and renders
+   * a raw iframe pointing to the Datadog Logs URL for the active trace ID.
+   * Deactivates visually when another tab becomes active. Safe to call repeatedly.
+   */
+  function injectSpanViewTraceLogsTab() {
+    // If a timer is already pending do nothing — it will do a fresh query when it fires
+    if (spanViewTabInjectTimer !== null) {
+      return;
+    }
+
+    // Only schedule if at least one span view is missing the tab
+    let needsTab = false;
+    for (const sv of document.querySelectorAll(SPAN_VIEW_SELECTOR)) {
+      const nav = sv.querySelector(SPAN_VIEW_NAV_SELECTOR);
+      if (nav && !nav.querySelector(`[${SPAN_VIEW_TAB_BUTTON_ATTR}]`)) {
+        needsTab = true;
+        break;
+      }
+    }
+    if (!needsTab) {
+      return;
+    }
+
+    spanViewTabInjectTimer = setTimeout(() => {
+      spanViewTabInjectTimer = null;
+
+      // Fresh query — never rely on captured DOM references from before the delay
+      document.querySelectorAll(SPAN_VIEW_SELECTOR).forEach((spanView) => {
+        const nav = spanView.querySelector(SPAN_VIEW_NAV_SELECTOR);
+        if (!nav || nav.querySelector(`[${SPAN_VIEW_TAB_BUTTON_ATTR}]`)) {
+          return;
+        }
+
+        // Build the tab element to match existing tab styles
+        const tooltipWrapper = document.createElement('div');
+        tooltipWrapper.className = 'druids_dialogs_tooltip';
+        tooltipWrapper.style.display = 'inline-flex';
+
+        const tabDiv = document.createElement('div');
+        tabDiv.className = 'druids_nav_tab druids_nav_tab--md';
+        tabDiv.setAttribute('tabindex', '0');
+        tabDiv.setAttribute('aria-selected', 'false');
+        tabDiv.setAttribute('role', 'tab');
+        tabDiv.setAttribute(SPAN_VIEW_TAB_BUTTON_ATTR, 'true');
+
+        const tabLink = document.createElement('span');
+        tabLink.className = 'druids_nav_tab__link';
+
+        const flexSpan = document.createElement('span');
+        flexSpan.className =
+          'druids_layout_flex druids_layout_flex--direction-row druids_layout_flex--align-items-center ' +
+          'druids_layout_flex--justify-flex-start druids_layout_flex--wrap-nowrap druids_nav_tab__label--capitalize';
+        flexSpan.style.setProperty('--flex-gap-x', '8px');
+
+        const labelSpan = document.createElement('span');
+        labelSpan.className = 'druids_layout_flex-item';
+        labelSpan.textContent = 'Trace Logs';
+
+        flexSpan.appendChild(labelSpan);
+        tabLink.appendChild(flexSpan);
+        tabDiv.appendChild(tabLink);
+        tooltipWrapper.appendChild(tabDiv);
+        nav.appendChild(tooltipWrapper);
+
+        // Deactivate our tab and restore Datadog's content when another tab becomes active
+        const navObserver = new MutationObserver(() => {
+          const ddActiveTab = nav.querySelector(
+            '.druids_nav_tab--is-active:not([' + SPAN_VIEW_TAB_BUTTON_ATTR + '])'
+          );
+          if (ddActiveTab && tabDiv.classList.contains('druids_nav_tab--is-active')) {
+            tabDiv.classList.remove('druids_nav_tab--is-active');
+            tabDiv.setAttribute('aria-selected', 'false');
+
+            // Remove our iframe wrapper and restore Datadog's hidden content
+            const tc = spanView.querySelector('.trace_span-view-full-access__tab-content');
+            if (tc) {
+              const wrapper = tc.querySelector(`[${SPAN_VIEW_IFRAME_ATTR}]`);
+              if (wrapper) {
+                wrapper.remove();
+              }
+              if (tc.firstElementChild && tc.firstElementChild.style.display === 'none') {
+                tc.firstElementChild.style.display = '';
+              }
+            }
+          }
+        });
+        navObserver.observe(nav, { attributes: true, subtree: true, attributeFilter: ['class', 'aria-selected'] });
+
+        // Disconnect when the span view is removed from the DOM
+        const removalObserver = new MutationObserver(() => {
+          if (!document.body.contains(spanView)) {
+            navObserver.disconnect();
+            removalObserver.disconnect();
+          }
+        });
+        removalObserver.observe(document.body, { childList: true, subtree: true });
+
+        tabDiv.addEventListener('click', () => {
+          const traceId = getPageTraceId();
+          if (!traceId) {
+            return;
+          }
+
+          // Deactivate whichever tab is currently active
+          nav.querySelectorAll('.druids_nav_tab--is-active').forEach((activeTab) => {
+            activeTab.classList.remove('druids_nav_tab--is-active');
+            activeTab.setAttribute('aria-selected', 'false');
+          });
+
+          // Visually activate our tab
+          tabDiv.classList.add('druids_nav_tab--is-active');
+          tabDiv.setAttribute('aria-selected', 'true');
+
+          const tabContent = spanView.querySelector('.trace_span-view-full-access__tab-content');
+          if (!tabContent) {
+            return;
+          }
+
+          // Remove any previous iframe wrapper we injected
+          const existing = tabContent.querySelector(`[${SPAN_VIEW_IFRAME_ATTR}]`);
+          if (existing) {
+            existing.remove();
+          }
+
+          // Hide Datadog's current tab content without touching its structure or classes
+          if (tabContent.firstElementChild) {
+            tabContent.firstElementChild.style.display = 'none';
+          }
+
+          // Append our iframe wrapper as a sibling — Datadog's div is untouched
+          const iframeWrapper = document.createElement('div');
+          iframeWrapper.setAttribute(SPAN_VIEW_IFRAME_ATTR, 'true');
+
+          const iframe = document.createElement('iframe');
+          iframe.src = buildLogsUrl(traceId);
+          iframe.style.cssText = 'width:100%;height:600px;border:none;display:block;';
+
+          iframeWrapper.appendChild(iframe);
+          tabContent.appendChild(iframeWrapper);
+        });
+      });
+    }, 5000);
+  }
+
+  /**
+   * Scans Datadog APM trace header panels for the trace_id label and injects an
+   * open-in-panel button directly after the trace ID value span.
+   * Safe to call repeatedly; already-injected headers are skipped.
+   */
+  function injectTraceHeaderPanelButtons() {
+    const headers = document.querySelectorAll(TRACE_HEADER_SELECTOR);
+
+    headers.forEach((header) => {
+      if (header.querySelector(`[${TRACE_HEADER_BUTTON_ATTR}]`)) {
+        return;
+      }
+
+      // Find the "trace_id" label span (has druids_margin--right-sm and text "trace_id")
+      let traceIdLabelSpan = null;
+      const candidateSpans = header.querySelectorAll('span.druids_margin--right-sm');
+      for (const span of candidateSpans) {
+        if (span.textContent.trim() === 'trace_id') {
+          traceIdLabelSpan = span;
+          break;
+        }
+      }
+
+      if (!traceIdLabelSpan) {
+        return;
+      }
+
+      // The trace ID value span is the next sibling of the label span
+      const traceIdValueSpan = traceIdLabelSpan.nextElementSibling;
+      if (!traceIdValueSpan) {
+        return;
+      }
+
+      // Extract the trace ID from the overflower original div
+      const overflowerOriginal = traceIdValueSpan.querySelector(
+        'div[data-component-name="overflower-original"].druids_layout_overflower__original'
+      );
+      if (!overflowerOriginal) {
+        return;
+      }
+
+      const traceId = overflowerOriginal.textContent.trim();
+      if (!traceId || !/^[a-f0-9]{16,64}$/i.test(traceId)) {
+        return;
+      }
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className =
+        'druids_form_button druids_form_button--sm druids_form_button--default druids_form_button--has-icon-only druids_form_button--is-naked';
+      button.setAttribute(TRACE_HEADER_BUTTON_ATTR, 'true');
+      button.setAttribute('aria-label', IFRAME_TOOLTIP_TEXT);
+      button.style.marginLeft = '6px';
+      button.style.flexShrink = '0';
+
+      const iconWrapper = document.createElement('div');
+      iconWrapper.className = 'druids_form_button__icon-wrapper';
+
+      const icon = document.createElement('i');
+      icon.className = 'fa-solid fa-window-restore';
+      icon.style.fontSize = '12px';
+      icon.setAttribute('aria-hidden', 'true');
+
+      iconWrapper.appendChild(icon);
+      button.appendChild(iconWrapper);
+
+      attachTooltipHandlers(button);
+
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        hideButtonTooltip();
+        openTraceIdInIframe(traceId);
+      });
+
+      traceIdValueSpan.insertAdjacentElement('afterend', button);
+    });
+  }
+
+  /**
    * Main injection entry point. Scans JSON viewer rows for TraceId fields and injects
    * open-in-tab and open-in-panel buttons into their tooltip containers.
    * Also delegates to injectDashboardTableButtons() for dashboard table rows.
@@ -1266,6 +1535,8 @@
 
     injectDashboardTableButtons();
     injectNavbarPrettifyButton();
+    injectTraceHeaderPanelButtons();
+    injectSpanViewTraceLogsTab();
   }
 
   ensureFontAwesomeLoaded();
